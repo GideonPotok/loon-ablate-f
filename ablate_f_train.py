@@ -223,8 +223,22 @@ def worker_fn(worker_id: int, result_queue: mp.Queue):
                 best_per_preset = ev['per_preset']
                 best_episode    = ep
                 best_weights    = agent.state_dict()
+                # Write to a temp file first, then rename — avoids a corrupt .pt
+                # if the job is killed mid-write.
                 ckpt_path = WEIGHTS_DIR / f'{WEIGHTS_PREFIX}_w{worker_id:02d}.pt'
-                torch.save(best_weights, ckpt_path)
+                tmp_path  = ckpt_path.with_suffix('.tmp')
+                torch.save(best_weights, tmp_path)
+                tmp_path.replace(ckpt_path)
+                # JSON written after the .pt rename so collect.py never sees a
+                # .json without a matching valid .pt.
+                json_path = WEIGHTS_DIR / f'{WEIGHTS_PREFIX}_w{worker_id:02d}.json'
+                json_path.write_text(json.dumps({
+                    'worker_id':       worker_id,
+                    'best_score':      best_score,
+                    'best_episode':    best_episode,
+                    'best_per_preset': best_per_preset,
+                    'elapsed_s':       time.time() - start_ts,
+                }))
 
             result_queue.put({
                 'type':       'eval',

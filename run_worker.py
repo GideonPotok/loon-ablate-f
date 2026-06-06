@@ -13,8 +13,6 @@ import queue
 import time
 from pathlib import Path
 
-import torch
-
 from ablate_f_train import worker_fn
 
 WEIGHTS_DIR    = Path(__file__).parent / "weights"
@@ -60,29 +58,21 @@ def main():
 
     worker_fn(args.worker_id, q)
 
-    all_msgs = []
-    while not q.empty():
-        all_msgs.append(q.get())
-    done = next(m for m in all_msgs if m["type"] == "done")
+    # worker_fn writes .pt and .json to disk on every new best, so both files
+    # exist even if this process is killed before reaching here.
+    m, s  = divmod(int(time.time() - t0), 60)
+    ckpt  = WEIGHTS_DIR / f"{WEIGHTS_PREFIX}_w{args.worker_id:02d}.pt"
+    jpath = WEIGHTS_DIR / f"{WEIGHTS_PREFIX}_w{args.worker_id:02d}.json"
 
-    m, s = divmod(int(time.time() - t0), 60)
-    print(f"\n[w{args.worker_id:02d}] Finished in {m}m{s:02d}s", flush=True)
-    print(f"[w{args.worker_id:02d}] Best score {done['best_score']*100:.1f}%  ep {done['best_episode']}", flush=True)
-
-    ckpt = WEIGHTS_DIR / f"{WEIGHTS_PREFIX}_w{args.worker_id:02d}.pt"
-    torch.save(done["best_weights"], ckpt)
-    print(f"[w{args.worker_id:02d}] Weights → {ckpt}", flush=True)
-
-    result = {
-        "worker_id":       args.worker_id,
-        "best_score":      done["best_score"],
-        "best_episode":    done["best_episode"],
-        "best_per_preset": done.get("best_per_preset"),
-        "elapsed_s":       done["elapsed_s"],
-    }
-    json_path = WEIGHTS_DIR / f"{WEIGHTS_PREFIX}_w{args.worker_id:02d}.json"
-    json_path.write_text(json.dumps(result, indent=2))
-    print(f"[w{args.worker_id:02d}] Scores  → {json_path}", flush=True)
+    if ckpt.exists() and jpath.exists():
+        info = json.loads(jpath.read_text())
+        print(f"\n[w{args.worker_id:02d}] Finished in {m}m{s:02d}s", flush=True)
+        print(f"[w{args.worker_id:02d}] Best score {info['best_score']*100:.1f}%"
+              f"  ep {info['best_episode']}", flush=True)
+        print(f"[w{args.worker_id:02d}] Weights → {ckpt}", flush=True)
+    else:
+        print(f"\n[w{args.worker_id:02d}] WARNING: no checkpoint found after {m}m{s:02d}s"
+              " — worker may not have reached its first eval", flush=True)
 
 
 if __name__ == "__main__":
