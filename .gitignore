@@ -1,0 +1,9 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# trained weights (large/ephemeral)
+weights/dqn_*.pt
+weights/dqn_*_summary.json
