@@ -36,9 +36,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: worker-${{ matrix.worker_id }}
-          path: |
-            weights/dqn_ablate_f_w${{ matrix.worker_id }}.pt
-            weights/dqn_ablate_f_w${{ matrix.worker_id }}.json
+          if-no-files-found: error
+          # The worker writes zero-padded filenames (w00..w09), so match with a
+          # glob rather than the un-padded matrix id (w0..w9 would match nothing).
+          path: weights/dqn_ablate_f_w*
 
   collect:
     name: Collect & Pick Winner
@@ -59,7 +60,10 @@ jobs:
       - name: Download all worker artifacts
         uses: actions/download-artifact@v4
         with:
-          path: .
+          # upload-artifact strips the common "weights/" ancestor, so the
+          # artifacts contain bare filenames; download them back into weights/
+          # where collect.py expects them.
+          path: weights
           merge-multiple: true
 
       - name: Collect results and pick winner
